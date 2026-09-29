@@ -35,19 +35,8 @@ def ask_ollama(prompt):
 
 def calculator(a, b):
 
-        if op == "+":
-            return a + b
 
-        elif op == "-":
-            return a - b
-
-        elif op == "*":
-            return a * b
-
-        elif op == "/":
-            return a / b
-        else:
-            return "Unknown operation"
+  return "Unknown operation"
 
 
 
