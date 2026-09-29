@@ -1,5 +1,18 @@
 import requests
 import re
+import json
+
+try:
+    with open("memory.json","r") as f:
+        memory = json.load(f)
+
+        if not isinstance(memory, dict):
+            memory = {}
+except:
+    memory = {}
+
+
+    
 
 def ask_ollama(prompt):
 
@@ -21,10 +34,58 @@ def ask_ollama(prompt):
 
 
 def calculator(a, b):
-    return a + b
+
+        if op == "+":
+            return a + b
+
+        elif op == "-":
+            return a - b
+
+        elif op == "*":
+            return a * b
+
+        elif op == "/":
+            return a / b
+        else:
+            return "Unknown operation"
+
+
+
+        
+
+def extract_city(user_input):
+
+    words = user_input.lower().split()
+
+    if "in" in words:
+        idx = words.index("in")
+
+        if idx + 1 < len(words):
+            return words[idx + 1].capitalize()
+
+    if "of" in words:
+        idx = words.index("of")
+
+        if idx + 1 < len(words):
+            return words[idx + 1].capitalize()
+
+    return "Nagpur"
 
 def weather(city):
-    return f"{city}: 31C"
+
+    try:
+        url = f"https://wttr.in/{city}?format=j1"
+
+        response = requests.get(url)
+
+        data = response.json()
+
+        temp = data["current_condition"][0]["temp_C"]
+
+        return f"{city}: {temp}°C"
+
+    except Exception as e:
+        return f"Weather Error: {e}"
 
 def choose_tool(user_input):
 
@@ -72,7 +133,50 @@ while True:
     if user_input.lower() == "exit":
         print("Ghost: Goodbye!")
         break
+
+    
+    # MEMORY SAVE
+    
+
+    if "my name is" in user_input.lower():
+
+        name = user_input.lower().replace(
+            "my name is", ""
+        ).strip()
+
+        print(type(memory))
+        print(memory)
+
+        memory["name"] = name
+
+        with open("memory.json","w") as f:
+            json.dump(memory, f, indent=4)
+        print("Memory Saved:", memory)
+
+        print(f"Ghost: Nice to meet you, {name}!")
+
+        continue
+
+    
+    # MEMORY RECALL
+    
+
+    if "what is my name" in user_input.lower():
+
+        if "name" in memory:
+            print(
+                f"Ghost: Your name is {memory['name']}"
+            )
+        else:
+            print(
+                "Ghost: I don't know your name yet."
+            )
+
+        continue
+
+
     tool = choose_tool(user_input)
+
 
     print("Raw Tool Response:", repr(tool))
 
@@ -98,7 +202,9 @@ while True:
 # Weather Tool
     elif tool == "weather":
 
-        city = "Nagpur"
+        city = extract_city(user_input)
+
+        print("Extracted City:", city)
 
         result =weather(city)
 
