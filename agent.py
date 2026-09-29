@@ -2,17 +2,23 @@ import requests
 import re
 import json
 
+
+# LOAD MEMORY
+
+
 try:
-    with open("memory.json","r") as f:
+    with open("memory.json", "r") as f:
         memory = json.load(f)
 
         if not isinstance(memory, dict):
             memory = {}
+
 except:
     memory = {}
 
 
-    
+# OLLAMA CHAT
+
 
 def ask_ollama(prompt):
 
@@ -31,28 +37,46 @@ def ask_ollama(prompt):
     return data["response"]
 
 
+# CALCULATOR TOOL
 
 
-def calculator(a, b):
+def calculator(a, b, op):
+
+    if op == "+":
+        return a + b
+
+    elif op == "-":
+        return a - b
+
+    elif op == "*":
+        return a * b
+
+    elif op == "/":
+
+        if b == 0:
+            return "Cannot divide by zero"
+
+        return a / b
+
+    return "Unknown operation"
 
 
-  return "Unknown operation"
+# CITY EXTRACTION
 
-
-
-        
 
 def extract_city(user_input):
 
     words = user_input.lower().split()
 
     if "in" in words:
+
         idx = words.index("in")
 
         if idx + 1 < len(words):
             return words[idx + 1].capitalize()
 
     if "of" in words:
+
         idx = words.index("of")
 
         if idx + 1 < len(words):
@@ -60,12 +84,20 @@ def extract_city(user_input):
 
     return "Nagpur"
 
+
+# WEATHER TOOL
+
+
 def weather(city):
 
     try:
+
         url = f"https://wttr.in/{city}?format=j1"
 
         response = requests.get(url)
+
+        if response.status_code != 200:
+            return "Weather service unavailable"
 
         data = response.json()
 
@@ -74,11 +106,14 @@ def weather(city):
         return f"{city}: {temp}°C"
 
     except Exception as e:
+
         return f"Weather Error: {e}"
 
-def choose_tool(user_input):
 
-# def choose_tool(user_input):
+# TOOL SELECTION
+
+
+def choose_tool(user_input):
 
     user_input = user_input.lower()
 
@@ -90,42 +125,27 @@ def choose_tool(user_input):
 
     else:
         return "none"
-        prompt = f"""
-        You are an AI agent.
 
-        Available tools:
-        1. calculator
-        2. weather
 
-        Rules:
-        - Use calculator for math.
-        - Use weather for weather questions.
-        - Use none for normal chat.
+# START
 
-        User: {user_input}
-
-        Reply with ONLY one word:
-        calculator
-        weather
-        none
-        """
-
-    return ask_ollama(prompt).strip().lower()
 
 print("Ghost Agent Started!")
 print("Type 'exit' to quit.\n")
 
+# MAIN LOOP
+
+
 while True:
 
-    user_input = input("you:")
+    user_input = input("you: ")
 
     if user_input.lower() == "exit":
         print("Ghost: Goodbye!")
         break
 
-    
-    # MEMORY SAVE
-    
+    # NAME MEMORY SAVE
+
 
     if "my name is" in user_input.lower():
 
@@ -133,22 +153,18 @@ while True:
             "my name is", ""
         ).strip()
 
-        print(type(memory))
-        print(memory)
-
         memory["name"] = name
 
-        with open("memory.json","w") as f:
+        with open("memory.json", "w") as f:
             json.dump(memory, f, indent=4)
-        print("Memory Saved:", memory)
 
         print(f"Ghost: Nice to meet you, {name}!")
 
         continue
 
-    
-    # MEMORY RECALL
-    
+
+    # NAME MEMORY RECALL
+
 
     if "what is my name" in user_input.lower():
 
@@ -156,6 +172,7 @@ while True:
             print(
                 f"Ghost: Your name is {memory['name']}"
             )
+
         else:
             print(
                 "Ghost: I don't know your name yet."
@@ -163,15 +180,59 @@ while True:
 
         continue
 
+  
+    # CITY MEMORY SAVE
+   
+
+    if "i live in" in user_input.lower():
+
+        city = user_input.lower().replace(
+            "i live in", ""
+        ).strip()
+
+        memory["city"] = city
+
+        with open("memory.json", "w") as f:
+            json.dump(memory, f, indent=4)
+
+        print(
+            f"Ghost: I'll remember that you live in {city}"
+        )
+
+        continue
+
+    
+    # CITY MEMORY RECALL
+   
+
+    if "where do i live" in user_input.lower():
+
+        if "city" in memory:
+
+            print(
+                f"Ghost: You live in {memory['city']}"
+            )
+
+        else:
+
+            print(
+                "Ghost: I don't know where you live yet."
+            )
+
+        continue
+
+    
+    # TOOL SELECTION
+   
 
     tool = choose_tool(user_input)
 
-
-    print("Raw Tool Response:", repr(tool))
-
     print("Selected Tool:", tool)
 
-# Calculator Tool
+   
+    # CALCULATOR
+   
+
     if tool == "calculator":
 
         numbers = re.findall(r"\d+", user_input)
@@ -181,29 +242,48 @@ while True:
             a = int(numbers[0])
             b = int(numbers[1])
 
-            result = calculator(a, b)
+            if "+" in user_input:
+                op = "+"
+
+            elif "-" in user_input:
+                op = "-"
+
+            elif "*" in user_input:
+                op = "*"
+
+            elif "/" in user_input:
+                op = "/"
+
+            else:
+                op = None
+
+            result = calculator(a, b, op)
 
             print("Ghost:", result)
 
         else:
-            print("Ghost: Could not find numbers,")
 
-# Weather Tool
+            print("Ghost: Could not find numbers")
+
+    
+    # WEATHER
+    
+
     elif tool == "weather":
 
         city = extract_city(user_input)
 
         print("Extracted City:", city)
 
-        result =weather(city)
+        result = weather(city)
 
         print("Ghost:", result)
 
+    # NORMAL CHAT
+ 
+
     else:
-
-
-# Normal chat
 
         answer = ask_ollama(user_input)
 
-        print('Ghost:', answer )
+        print("Ghost:", answer)
