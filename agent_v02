@@ -1,0 +1,252 @@
+
+
+from pathlib import Path
+
+import chromadb
+import requests
+from pypdf import PdfReader
+
+
+PDF_FOLDER = r"D:\GEN_AI\pdfs"
+print(Path(PDF_FOLDER).exists())
+
+pdf_files = list(
+    Path(PDF_FOLDER).glob("*.pdf")
+)
+CHROMA_PATH = "./chroma_db"
+
+client = chromadb.PersistentClient(
+    path=CHROMA_PATH
+)
+
+try:
+    client.delete_collection("multi_pdf_rag")
+except:
+    pass
+
+COLLECTION_NAME = "multi_pdf_rag"
+
+CHUNK_SIZE = 300
+CHUNK_OVERLAP = 50
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "llama3.2"
+
+
+def chunk_text(text: str,
+               chunk_size: int = CHUNK_SIZE,
+               overlap: int = CHUNK_OVERLAP) -> list[str]:
+
+    words = text.split()
+
+    return [
+        " ".join(words[i:i + chunk_size])
+        for i in range(
+            0,
+            len(words),
+            chunk_size - overlap
+        )
+    ]
+
+
+def extract_pdf_chunks():
+
+
+    documents = []
+    metadatas = []
+    ids = []
+
+    chunk_id = 1
+
+    
+
+    for pdf_file in pdf_files:
+
+        pdf_chunk_count = 0
+
+       
+
+        reader = PdfReader(str(pdf_file))
+
+
+        for page_number, page in enumerate(
+            reader.pages,
+            start=1
+        ):
+
+            text = page.extract_text()
+
+
+            if not text:
+                continue
+
+            for chunk in chunk_text(text):
+
+                pdf_chunk_count += 1
+
+                documents.append(chunk)
+
+                metadatas.append(
+                    {
+                        "source": pdf_file.name,
+                        "page": page_number
+                    }
+                )
+
+                ids.append(str(chunk_id))
+
+                chunk_id += 1
+
+
+    return documents, metadatas, ids
+
+
+def get_collection():
+
+    client = chromadb.PersistentClient(
+        path=CHROMA_PATH
+    )
+
+    return client.get_or_create_collection(
+        COLLECTION_NAME
+    )
+
+
+def load_documents(collection):
+
+    if collection.count() > 0:
+        print(
+            f"Collection already contains "
+            f"{collection.count()} chunks"
+        )
+        return
+
+    documents, metadatas, ids = extract_pdf_chunks()
+
+    collection.add(
+        ids=ids,
+        documents=documents,
+        metadatas=metadatas
+    )
+
+
+
+
+def retrieve_context(
+    collection,
+    question: str,
+    n_results: int = 10
+):
+
+    results = collection.query(
+        query_texts=[question],
+        n_results=n_results
+    )
+
+    context = "\n\n".join(
+        (
+            f"Source: {meta['source']}\n"
+            f"Page: {meta['page']}\n\n"
+            f"{doc}"
+        )
+        for doc, meta in zip(
+            results["documents"][0],
+            results["metadatas"][0]
+        )
+    )
+
+    return context, results
+
+
+def ask_ollama(prompt: str) -> str:
+
+    try:
+
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": MODEL_NAME,
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0
+            },
+            timeout=120
+        )
+
+        response.raise_for_status()
+
+        return response.json()["response"]
+
+    except requests.RequestException as error:
+
+        return f"Ollama Error: {error}"
+
+
+def build_prompt(
+    question: str,
+    context: str
+) -> str:
+
+    return f"""
+You are a document question-answering assistant.
+
+Answer using ONLY the provided context.
+
+If multiple passages are relevant,
+combine them into a clear answer.
+give the short andwer.
+Do not say the information is missing
+unless it truly does not exist in the context.
+tell which pdf is has the ans
+Include the source page numbers used.
+
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
+
+
+def main():
+
+    collection = get_collection()
+
+    load_documents(collection)
+
+    question = input("\nAsk: ").strip()
+
+    if not question:
+        print("Question cannot be empty.")
+        return
+
+    context, results = retrieve_context(
+        collection,
+        question
+    )
+
+
+
+    print(
+        "\nDistances:",
+        results["distances"][0]
+    )
+
+    prompt = build_prompt(
+        question,
+        context
+    )
+
+    answer = ask_ollama(prompt)
+
+    print("\nAnswer")
+    print("=" * 50)
+    print(answer)
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
