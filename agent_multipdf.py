@@ -254,11 +254,75 @@ class RAGEngine:
     ) -> None:
 
         self.store = store
+        self.last_question = ""
+
+    def rewrite_query(
+        self,
+        current_question: str
+    ) -> str:
+
+        if not self.last_question:
+            return current_question
+
+        prompt = f"""
+    Previous Question:
+    {self.last_question}
+
+    Current Question:
+    {current_question}
+
+    Rewrite the current question
+    so it is fully self-contained.
+
+    Keep the meaning exactly the same.
+
+    Return ONLY the rewritten question.
+    """
+
+        rewritten = OllamaClient.generate(prompt)
+
+        return rewritten.strip()
+
+    def is_followup(
+        self,
+        question: str
+    ) -> bool:
+
+        followup_words = {
+            "it",
+            "its",
+            "they",
+            "them",
+            "this",
+            "that",
+            "those"
+        }
+
+        words = question.lower().split()
+
+        return any(
+            word in followup_words
+            for word in words
+        )
 
     def ask(
         self,
         question: str
     ) -> str:
+
+        original_question = question
+
+        if self.is_followup(question):
+
+            question = self.rewrite_query(
+                question
+            )
+
+            print(
+                "\n[REWRITTEN QUERY]"
+            )
+
+            print(question)
 
         results = self.store.search(question)
 
@@ -294,7 +358,13 @@ Question:
 Answer:
 """
 
-        return OllamaClient.generate(prompt)
+        answer = OllamaClient.generate(prompt)
+
+        self.last_question = original_question
+
+        return answer
+
+        # return OllamaClient.generate(prompt)
 
 
 # ==========================================================
